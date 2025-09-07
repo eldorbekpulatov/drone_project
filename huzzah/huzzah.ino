@@ -40,9 +40,9 @@ void initialize_vcnl4200(){
 void initialize_voltage_sensor(){
   // Example calibration data for a voltage divider with R1=4.7k and R2=330
   // This maps the ADC reading (0-1023) to the actual voltage (0-1V)
-  static const float x_known[] = {0.0f, 0.210f, 0.710f}; // Voltage divider values
-  static const float y_known[] = {0.0f, 3.266f, 11.0f};  // Actual voltages
-  static const float offsets[] = {0.0f, -0.50f, -0.60f}; // Calibration offsets
+  static const float x_known[] = {0.0f, 0.211f, 0.710f}; // Voltage divider values
+  static const float y_known[] = {0.0f, 3.26f, 11.0f};   // Actual voltages
+  static const float offsets[] = {0.0f, -0.44f, -0.60f}; // Calibration offsets
   
   // Initialize the voltage sensor on ADC pin A0 with a max voltage of 1V
   volt = Adafruit_VoltageSens(A0, 1.0, x_known, y_known, offsets, sizeof(x_known)/sizeof(x_known[0]));
@@ -125,6 +125,13 @@ void loop() {
   sensors_event_t voltage_event;
   volt.getEvent(&voltage_event);
   print_voltage_reading(voltage_event);
+
+  int raw = analogRead(A0); // ADC reading (0-1023 for 10-bit 1V max)
+  float vdiv = (raw / 1023.0f) * 1.0f; // 1.0V max for voltage divider
+  float actualVoltage = vdiv * (4.68 + 0.326) / 0.326; // R1=4.7k, R2=330
+  Serial.print(" => Extrapolated Voltage: ");
+  Serial.print(actualVoltage);
+  Serial.println(" V");
 
   Serial.println("");
   delay(500);
