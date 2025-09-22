@@ -3,7 +3,6 @@
 #include <Adafruit_VoltageSens.h>
 
 // Global structs
-Adafruit_VCNL4200 vcnl;
 Adafruit_MPU6050 mpu;
 Adafruit_VoltageSens volt;
 
@@ -146,22 +145,6 @@ void initialize_mpu6050(){
 }
 
 
-void initialize_vcnl4200(){
-  if (!vcnl.begin()) {
-    Serial.println("Could not find a valid VCNL4200 sensor, check wiring!");
-    while (1) { delay(10); }
-  }
-  Serial.println("VCNL4200 found!");
-
-  vcnl.setALSshutdown(false);
-  vcnl.setALSIntegrationTime(VCNL4200_ALS_IT_100MS);
-  vcnl.setALSPersistence(VCNL4200_ALS_PERS_2);
-  vcnl.setProxShutdown(false);
-  vcnl.setProxHD(false);
-  vcnl.setProxLEDCurrent(VCNL4200_LED_I_200MA);
-  vcnl.setProxIntegrationTime(VCNL4200_PS_IT_8T);
-}
-
 void initialize_voltage_sensor(){
   // Example calibration data for a voltage divider with R1=4.7k and R2=330
   // This maps the ADC reading (0-1023) to the actual voltage (0-1V)
@@ -200,15 +183,6 @@ void print_mpu_readings(sensors_event_t a, sensors_event_t g, sensors_event_t te
 }
 
 
-void print_vcnl_readings( uint16_t proxData, uint16_t alsData, uint16_t whiteData){
-  Serial.print("Prox Data: ");
-  Serial.print(proxData);
-  Serial.print(", ALS Data: ");
-  Serial.print(alsData);
-  Serial.print(", White Data: ");
-  Serial.println(whiteData);
-}
-
 void print_voltage_reading(sensors_event_t voltage_event){
   /* Print out the values */
   Serial.print("Voltage: ");
@@ -225,7 +199,6 @@ void setup(void) {
 
   // Try to initialize!
   initialize_mpu6050();
-  initialize_vcnl4200();
   initialize_voltage_sensor();
 
   Serial.println("");
@@ -237,14 +210,6 @@ void loop() {
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
   print_mpu_readings(a, g, temp);
-
-  // Read the proximity sensor data
-  uint16_t proxData = vcnl.readProxData();
-  // Read the ambient light sensor (ALS) data
-  uint16_t alsData = vcnl.readALSdata();
-  // Read the raw white sensor data
-  uint16_t whiteData = vcnl.readWhiteData();
-  print_vcnl_readings(proxData, alsData, whiteData);
 
   // Read the voltage sensor data
   sensors_event_t voltage_event;
