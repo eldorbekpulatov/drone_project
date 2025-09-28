@@ -224,11 +224,34 @@ void initialize_voltage_sensor(){
   static const float x_known[] = {0.0f, 0.211f, 0.710f}; // Voltage divider values
   static const float y_known[] = {0.0f, 3.26f, 11.0f};   // Actual voltages
   static const float offsets[] = {0.0f, -0.44f, -0.60f}; // Calibration offsets
-  
+
   // Initialize the voltage sensor on ADC pin A0 with a max voltage of 1V
   volt = Adafruit_VoltageSens(A0, 1.0, x_known, y_known, offsets, sizeof(x_known)/sizeof(x_known[0]));
   
   Serial.println("Voltage Sensor initialized!");
+}
+
+// Calibration Offsets
+float CalGyroX = 0, CalGyroY = 0, CalGyroZ = 0;
+void calibrate_mpu_6050(){
+  Serial.println("Calibrating MPU6050... Keep device still!");
+  int CalibrationAggregateNum = 0;
+
+  for (CalibrationAggregateNum = 0; CalibrationAggregateNum < 2000; CalibrationAggregateNum++){
+    sensors_event_t gyro_e;
+    mpu.getGyroSensor()->getEvent(&gyro_e);
+    CalGyroX += gyro_e.gyro.x;
+    CalGyroY += gyro_e.gyro.y;
+    CalGyroZ += gyro_e.gyro.z;
+    delay(1);
+  }
+  CalGyroX /= CalibrationAggregateNum;
+  CalGyroY /= CalibrationAggregateNum;
+  CalGyroZ /= CalibrationAggregateNum;
+  Serial.print("Calibration done! Offsets: ");
+  Serial.print(CalGyroX); Serial.print(", ");
+  Serial.print(CalGyroY); Serial.print(", ");
+  Serial.println(CalGyroZ);
 }
 
 
@@ -243,11 +266,11 @@ void print_mpu_readings(sensors_event_t a, sensors_event_t g, sensors_event_t te
   Serial.println(" m/s^2");
 
   Serial.print("Rotation X: ");
-  Serial.print(g.gyro.x);
+  Serial.print(g.gyro.x - CalGyroX);
   Serial.print(", Y: ");
-  Serial.print(g.gyro.y);
+  Serial.print(g.gyro.y - CalGyroY);
   Serial.print(", Z: ");
-  Serial.print(g.gyro.z);
+  Serial.print(g.gyro.z - CalGyroZ);
   Serial.println(" rad/s");
 
   Serial.print("Temperature: ");
@@ -257,7 +280,6 @@ void print_mpu_readings(sensors_event_t a, sensors_event_t g, sensors_event_t te
 
 
 void print_voltage_reading(sensors_event_t voltage_event){
-  /* Print out the values */
   Serial.print("Voltage: ");
   Serial.print(voltage_event.voltage);
   Serial.println(" V");
@@ -274,6 +296,7 @@ void setup(void) {
   initialize_wifi();
   initialize_mpu6050();
   initialize_voltage_sensor();
+  calibrate_mpu_6050();
 
   Serial.println("");
   delay(100);
