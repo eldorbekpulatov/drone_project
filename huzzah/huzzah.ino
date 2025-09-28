@@ -1,3 +1,5 @@
+#include <ESP8266WiFi.h>
+#include <ESPAsyncTCP.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_VCNL4200.h>
 #include <Adafruit_VoltageSens.h>
@@ -5,8 +7,79 @@
 // Global structs
 Adafruit_MPU6050 mpu;
 Adafruit_VoltageSens volt;
+AsyncServer *server = nullptr;
 
-// https://adafruit.github.io/Adafruit_MPU6050/html/class_adafruit___m_p_u6050.html
+// 🔐 Wi-Fi credentials
+const char* ssid = "TMOBILE-6BD8";
+const char* password = "eg9rh5np7hk";
+
+
+unsigned long lastTime = 0;
+void initialize_wifi() {
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(300);
+    Serial.print(".");
+  }
+  Serial.println("\n✅ WiFi connected!");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  // Start Async TCP server
+  server = new AsyncServer(80);
+  server->onClient([](void *arg, AsyncClient *client) {
+    Serial.println("📶 New client connected");
+
+    // 🔧 Disable Nagle's Algorithm (send immediately, no delay)
+    client->setNoDelay(true);
+
+    // Optional: print client IP
+    Serial.print("Client IP: ");
+    Serial.println(client->remoteIP());
+
+    // On data received
+    client->onData([](void *arg, AsyncClient *client, void *data, size_t len) {
+      // unsigned long now = millis();
+      // Serial.print("Data received at ");
+      // Serial.print(now);
+      // Serial.print(" ms (Δ=");
+      // Serial.print(now - lastTime);
+      // Serial.println(" ms)");
+      // lastTime = now;
+
+      if (len >= 4) {
+        uint8_t *buffer = (uint8_t *)data;
+
+        int8_t leftX  = (int8_t)buffer[0];
+        int8_t leftY  = (int8_t)buffer[1];
+        int8_t rightX = (int8_t)buffer[2];
+        int8_t rightY = (int8_t)buffer[3];
+
+        Serial.print("L:(");
+        Serial.print(leftX);
+        Serial.print(",");
+        Serial.print(leftY);
+        Serial.print(")  R:(");
+        Serial.print(rightX);
+        Serial.print(",");
+        Serial.print(rightY);
+        Serial.println(")");
+      }
+    }, NULL);
+
+    // On disconnect
+    client->onDisconnect([](void *arg, AsyncClient *client) {
+      Serial.println("❌ Client disconnected");
+    }, NULL);
+
+  }, NULL);
+
+  server->begin();
+  Serial.println("🚀 Async TCP server started on port 80");
+}
+
+
 void initialize_mpu6050(){
   if (!mpu.begin()) {
     Serial.println("Could not find a valid  MPU6050 sensor, check wiring!");
@@ -198,6 +271,7 @@ void setup(void) {
   Serial.println("Serial Initialized!");
 
   // Try to initialize!
+  initialize_wifi();
   initialize_mpu6050();
   initialize_voltage_sensor();
 
