@@ -13,7 +13,7 @@ AsyncServer *server = nullptr;
 const char* ssid = "TMOBILE-6BD8";
 const char* password = "eg9rh5np7hk";
 
-
+// latency related global
 unsigned long lastTime = 0;
 void initialize_wifi() {
   WiFi.begin(ssid, password);
@@ -40,14 +40,6 @@ void initialize_wifi() {
 
     // On data received
     client->onData([](void *arg, AsyncClient *client, void *data, size_t len) {
-      // unsigned long now = millis();
-      // Serial.print("Data received at ");
-      // Serial.print(now);
-      // Serial.print(" ms (Δ=");
-      // Serial.print(now - lastTime);
-      // Serial.println(" ms)");
-      // lastTime = now;
-
       if (len >= 4) {
         uint8_t *buffer = (uint8_t *)data;
 
@@ -66,6 +58,12 @@ void initialize_wifi() {
         Serial.print(rightY);
         Serial.println(")");
       }
+      // print latency
+      unsigned long now = millis();
+      Serial.print("Latency: Δ = ");
+      Serial.print(now - lastTime);
+      Serial.println(" ms)");
+      lastTime = now;
     }, NULL);
 
     // On disconnect
@@ -285,11 +283,21 @@ void print_voltage_reading(sensors_event_t voltage_event){
   Serial.println(" V");
 }
 
+// volatile int counter = 0;
+// IRAM_ATTR void inc_counter() {
+//     counter += 1;
+// }
+// attachInterrupt(digitalPinToInterrupt(16), inc_counter, CHANGE); // FG
+
+// pinMode(16, OUTPUT); // DIR    
+// digitalWrite(6, HIGH); 
+
+// pinMode(0, OUTPUT); // PWM
+// analogWrite(0, 127); 
+
 void setup(void) {
   Serial.begin(115200);
-  while (!Serial){
-    delay(10); // will pause until serial console opens
-  }
+  while (!Serial){ delay(10); }
   Serial.println("Serial Initialized!");
 
   // Try to initialize!
@@ -299,20 +307,25 @@ void setup(void) {
   calibrate_mpu_6050();
 
   Serial.println("");
-  delay(100);
+  delay(100); // blocking
 }
 
+// use millis() so that loop itself becomes non-blocking
+unsigned long previousMillis = 0; 
+const long interval = 250; 
 void loop() {
-  /* Get new sensor events with the readings */
-  sensors_event_t a, g, temp;
-  mpu.getEvent(&a, &g, &temp);
-  print_mpu_readings(a, g, temp);
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
 
-  // Read the voltage sensor data
-  sensors_event_t voltage_event;
-  volt.getEvent(&voltage_event);
-  print_voltage_reading(voltage_event);
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+    print_mpu_readings(a, g, temp);
 
-  Serial.println("");
-  delay(500);
+    sensors_event_t voltage_event;
+    volt.getEvent(&voltage_event);
+    print_voltage_reading(voltage_event);
+
+    Serial.println("");
+  }
 }
