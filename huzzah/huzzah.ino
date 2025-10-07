@@ -1,27 +1,22 @@
 #include <ESP8266WiFi.h>
 #include <ESPAsyncTCP.h>
-#include <Adafruit_ICM20X.h>
-#include <Adafruit_ICM20948.h>
-#include <Adafruit_VCNL4200.h>
 #include <Adafruit_VoltageSens.h>
-#include <Adafruit_Sensor.h>
-#include "Adafruit_BMP3XX.h"
+#include <Adafruit_VCNL4200.h>
+#include <Adafruit_BMP3XX.h>
+#include <Adafruit_ICM20948.h>
 
 // Global structs
-Adafruit_ICM20948 icm;
+AsyncServer *server = nullptr;
+Adafruit_VoltageSens volt;
 Adafruit_VCNL4200 vcnl;
 Adafruit_BMP3XX bmp;
-Adafruit_VoltageSens volt;
-AsyncServer *server = nullptr;
+Adafruit_ICM20948 icm;
 
-uint16_t measurement_delay_us = 65535; // Delay between measurements for testing
-#define SEALEVELPRESSURE_HPA (1013.25)
 
 // 🔐 Wi-Fi credentials
 const char* ssid = "TMOBILE-6BD8";
 const char* password = "eg9rh5np7hk";
 
-// latency related global
 unsigned long lastTime = 0;
 void initialize_wifi() {
   WiFi.begin(ssid, password);
@@ -85,18 +80,57 @@ void initialize_wifi() {
   Serial.println("🚀 Async TCP server started on port 80");
 }
 
+void initialize_voltage_sensor(){
+  // Example calibration data for a voltage divider with R1=4.7k and R2=330
+  // This maps the ADC reading (0-1023) to the actual voltage (0-1V)
+  static const float x_known[] = {0.0f, 0.211f, 0.710f}; // Voltage divider values
+  static const float y_known[] = {0.0f, 3.26f, 11.0f};   // Actual voltages
+  static const float offsets[] = {0.0f, -0.44f, -0.60f}; // Calibration offsets
+
+  // Initialize the voltage sensor on ADC pin A0 with a max voltage of 1V
+  volt = Adafruit_VoltageSens(A0, 1.0, x_known, y_known, offsets, sizeof(x_known)/sizeof(x_known[0]));
+  
+  Serial.println("Voltage Sensor initialized!");
+}
+
+void initialize_vcnl4200(){
+  if (!vcnl.begin()) {
+    Serial.println("Could not find a valid VCNL4200 sensor, check wiring!");
+    while (1) { delay(10); }
+  }
+  Serial.println("VCNL4200 found!");
+
+  vcnl.setALSshutdown(false);
+  vcnl.setALSIntegrationTime(VCNL4200_ALS_IT_100MS);
+  vcnl.setALSPersistence(VCNL4200_ALS_PERS_2);
+  vcnl.setProxShutdown(false);
+  vcnl.setProxHD(false);
+  vcnl.setProxLEDCurrent(VCNL4200_LED_I_200MA);
+  vcnl.setProxIntegrationTime(VCNL4200_PS_IT_8T);
+}
+
+#define SEALEVELPRESSURE_HPA (1013.25)
+void initialize_bmp388(){
+  if (!bmp.begin_I2C()) {
+    Serial.println("Could not find a valid BMP3 sensor, check wiring!");
+    while (1) { delay(10); }
+  }
+
+  // Set up oversampling and filter initialization
+  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
+  bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
+  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+  bmp.setOutputDataRate(BMP3_ODR_50_HZ);
+}
+
 void initialize_icm20948(){
   // Try to initialize!
   if (!icm.begin_I2C()) {
-    // if (!icm.begin_SPI(ICM_CS)) {
-    // if (!icm.begin_SPI(ICM_CS, ICM_SCK, ICM_MISO, ICM_MOSI)) {
-
     Serial.println("Failed to find ICM20948 chip");
-    while (1) {
-      delay(10);
-    }
+    while (1) { delay(10); }
   }
   Serial.println("ICM20948 Found!");
+
   // icm.setAccelRange(ICM20948_ACCEL_RANGE_16_G);
   Serial.print("Accelerometer range set to: ");
   switch (icm.getAccelRange()) {
@@ -176,48 +210,33 @@ void initialize_icm20948(){
   Serial.println("Adafruit ICM-20948 initialized successfully!");
 }
 
-void initialize_vcnl4200(){
-  if (!vcnl.begin()) {
-    Serial.println("Could not find a valid VCNL4200 sensor, check wiring!");
-    while (1) { delay(10); }
-  }
-  Serial.println("VCNL4200 found!");
-
-  vcnl.setALSshutdown(false);
-  vcnl.setALSIntegrationTime(VCNL4200_ALS_IT_100MS);
-  vcnl.setALSPersistence(VCNL4200_ALS_PERS_2);
-  vcnl.setProxShutdown(false);
-  vcnl.setProxHD(false);
-  vcnl.setProxLEDCurrent(VCNL4200_LED_I_200MA);
-  vcnl.setProxIntegrationTime(VCNL4200_PS_IT_8T);
+void print_voltage_reading(sensors_event_t voltage_event){
+  Serial.print("Voltage: ");
+  Serial.print(voltage_event.voltage);
+  Serial.println(" V");
 }
 
-void initialize_voltage_sensor(){
-  // Example calibration data for a voltage divider with R1=4.7k and R2=330
-  // This maps the ADC reading (0-1023) to the actual voltage (0-1V)
-  static const float x_known[] = {0.0f, 0.211f, 0.710f}; // Voltage divider values
-  static const float y_known[] = {0.0f, 3.26f, 11.0f};   // Actual voltages
-  static const float offsets[] = {0.0f, -0.44f, -0.60f}; // Calibration offsets
-
-  // Initialize the voltage sensor on ADC pin A0 with a max voltage of 1V
-  volt = Adafruit_VoltageSens(A0, 1.0, x_known, y_known, offsets, sizeof(x_known)/sizeof(x_known[0]));
-  
-  Serial.println("Voltage Sensor initialized!");
+void print_vcnl_readings(uint16_t proxData, uint16_t alsData, uint16_t whiteData){
+  Serial.print("Prox Data: ");
+  Serial.print(proxData);
+  Serial.print(", ALS Data: ");
+  Serial.print(alsData);
+  Serial.print(", White Data: ");
+  Serial.println(whiteData);
 }
 
-void initialize_bmp388(){
-  if (!bmp.begin_I2C()) {   // hardware I2C mode, can pass in address & alt Wire
-  //if (! bmp.begin_SPI(BMP_CS)) {  // hardware SPI mode  
-  //if (! bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {  // software SPI mode
-    Serial.println("Could not find a valid BMP3 sensor, check wiring!");
-    while (1);
-  }
+void print_bmp388_readings(){
+  Serial.print("Temperature = ");
+  Serial.print(bmp.readTemperature());
+  Serial.println(" *C");
 
-  // Set up oversampling and filter initialization
-  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-  bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
-  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
-  bmp.setOutputDataRate(BMP3_ODR_50_HZ);
+  Serial.print("Pressure = ");
+  Serial.print(bmp.readPressure() / 100.0);
+  Serial.println(" hPa");
+
+  Serial.print("Approx. Altitude = ");
+  Serial.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
+  Serial.println(" m");
 }
 
 void print_icm_readings(sensors_event_t accel, sensors_event_t gyro, sensors_event_t temp, sensors_event_t mag){
@@ -253,34 +272,6 @@ void print_icm_readings(sensors_event_t accel, sensors_event_t gyro, sensors_eve
   Serial.println();
 }
 
-void print_vcnl_readings( uint16_t proxData, uint16_t alsData, uint16_t whiteData){
-  Serial.print("Prox Data: ");
-  Serial.print(proxData);
-  Serial.print(", ALS Data: ");
-  Serial.print(alsData);
-  Serial.print(", White Data: ");
-  Serial.println(whiteData);
-}
-
-void print_voltage_reading(sensors_event_t voltage_event){
-  Serial.print("Voltage: ");
-  Serial.print(voltage_event.voltage);
-  Serial.println(" V");
-}
-
-void print_bmp388_readings(){
-  Serial.print("Temperature = ");
-  Serial.print(bmp.readTemperature());
-  Serial.println(" *C");
-
-  Serial.print("Pressure = ");
-  Serial.print(bmp.readPressure() / 100.0);
-  Serial.println(" hPa");
-
-  Serial.print("Approx. Altitude = ");
-  Serial.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
-  Serial.println(" m");
-}
 
 // volatile int counter = 0;
 // IRAM_ATTR void inc_counter() {
@@ -301,10 +292,10 @@ void setup(void) {
 
   // Try to initialize!
   initialize_wifi();
+  initialize_voltage_sensor(); 
   initialize_vcnl4200();
-  initialize_voltage_sensor();
-  initialize_icm20948();
   initialize_bmp388();
+  initialize_icm20948();
 
   Serial.println("");
   delay(100); // blocking
@@ -318,29 +309,21 @@ void loop() {
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
     
-    /* TODO: maybe rewrite some of these functions*/
-    bmp.performReading();
-    print_bmp388_readings();
-
-    /* Get a new normalized sensor event */
-    sensors_event_t accel;
-    sensors_event_t gyro;
-    sensors_event_t mag;
-    sensors_event_t temp;
-    icm.getEvent(&accel, &gyro, &temp, &mag);
-    print_icm_readings(accel, gyro, temp, mag);
-    
-    // Read the proximity sensor data
-    uint16_t proxData = vcnl.readProxData();
-    // Read the ambient light sensor (ALS) data
-    uint16_t alsData = vcnl.readALSdata();
-    // Read the raw white sensor data
-    uint16_t whiteData = vcnl.readWhiteData();
-    print_vcnl_readings(proxData, alsData, whiteData);
-
     sensors_event_t voltage_event;
     volt.getEvent(&voltage_event);
     print_voltage_reading(voltage_event);
+
+    uint16_t proxData = vcnl.readProxData();
+    uint16_t alsData = vcnl.readALSdata();
+    uint16_t whiteData = vcnl.readWhiteData();
+    print_vcnl_readings(proxData, alsData, whiteData);
+
+    bmp.performReading();
+    print_bmp388_readings();
+
+    sensors_event_t accel, gyro, mag, temp;
+    icm.getEvent(&accel, &gyro, &temp, &mag);
+    print_icm_readings(accel, gyro, temp, mag);
 
     Serial.println("");
   }
