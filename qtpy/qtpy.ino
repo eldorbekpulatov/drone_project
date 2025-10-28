@@ -78,7 +78,7 @@ void initialize_wifi() {
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 void initialize_bmp388(){
-  if (!bmp.begin_I2C()) {
+  if (!bmp.begin_I2C(0x77, &Wire1)) {
     Serial.println("Could not find a valid BMP3 sensor, check wiring!");
     while (1) { delay(10); }
   }
@@ -93,7 +93,7 @@ void initialize_bmp388(){
 
 void initialize_icm20948(){
   // Try to initialize!
-  if (!icm.begin_I2C()) {
+  if (!icm.begin_I2C(0x69, &Wire1)) {
     Serial.println("Failed to find ICM20948 chip");
     while (1) { delay(10); }
   }
@@ -172,10 +172,14 @@ void setup(void) {
   while (!Serial){ delay(10); }
   Serial.println("Serial Initialized!"); 
 
-  // Try to initialize!
   initialize_wifi();
-  // initialize_icm20948();
-  // initialize_bmp388();
+
+  // Try to initialize I2C!
+  // On Qt Py ESP32-S3, STEMMA QT = SDA1=41, SCL1=40
+  // Ref: https://learn.adafruit.com/adafruit-qt-py-esp32-s3
+  Wire1.begin(41, 40);
+  initialize_icm20948();
+  initialize_bmp388();
 
   Serial.println("");
   delay(100); // blocking
@@ -183,18 +187,18 @@ void setup(void) {
 
 // use millis() so that loop itself becomes non-blocking
 unsigned long previousMillis = 0; 
-const long interval = 250; 
+const long interval = 1000; 
 void loop() {
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
 
-    // bmp.performReading();
-    // print_bmp388_readings();
+    bmp.performReading();
+    print_bmp388_readings();
 
-    // sensors_event_t accel, gyro, mag, temp;
-    // icm.getEvent(&accel, &gyro, &temp, &mag);
-    // print_icm_readings(accel, gyro, temp, mag);
+    sensors_event_t accel, gyro, mag, temp;
+    icm.getEvent(&accel, &gyro, &temp, &mag);
+    print_icm_readings(accel, gyro, temp, mag);
 
     Serial.println("");
   }
