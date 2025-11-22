@@ -76,20 +76,20 @@ void initialize_wifi() {
   Serial.println("🚀 Async TCP server started on port 80");
 }
 
-#define SEALEVELPRESSURE_HPA (1013.25)
 void initialize_bmp388(){
   if (!bmp.begin_I2C(0x77, &Wire1)) {
     Serial.println("Could not find a valid BMP3 sensor, check wiring!");
     while (1) { delay(10); }
   }
   // Set up oversampling and filter initialization
-  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-  bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
+  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_2X);
+  bmp.setPressureOversampling(BMP3_OVERSAMPLING_16X);
   bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
   bmp.setOutputDataRate(BMP3_ODR_50_HZ);
+  bmp.setPowerMode(BMP3_MODE_NORMAL);
+  bmp.applySettings();
   Serial.println("Adafruit BMP-388 initialized successfully!");
 }
-
 
 void initialize_icm20948(){
   // Try to initialize!
@@ -105,52 +105,55 @@ void initialize_icm20948(){
   Serial.println("Adafruit ICM-20948 initialized successfully!");
 }
 
-  
+void print(sensors_event_t *accel, sensors_event_t *gyro, sensors_event_t *mag, 
+  sensors_event_t *temp, sensors_event_t *press, sensors_event_t *alt){
+  // Serial.print("\t\tTime: ");
+  // Serial.print(event->timestamp);
+  // Serial.print(" ms");
+  // Serial.print("\tType:");
+  // Serial.print(event->type);
+  // Serial.print("\tVersion:");
+  // Serial.print(event->version);
+  // Serial.print("\tSens ID:");
+  // Serial.print(event->sensor_id);
+  // Serial.println();
 
-void print_bmp388_readings(){
-  Serial.print("Temperature = ");
-  Serial.print(bmp.readTemperature());
-  Serial.println(" *C");
-
-  Serial.print("Pressure = ");
-  Serial.print(bmp.readPressure() / 100.0);
-  Serial.println(" hPa");
-
-  Serial.print("Approx. Altitude = ");
-  Serial.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
-  Serial.println(" m");
-}
-
-void print_icm_readings(sensors_event_t accel, sensors_event_t gyro, sensors_event_t temp, sensors_event_t mag){
-  Serial.print("\t\tTemperature ");
-  Serial.print(temp.temperature);
-  Serial.println(" deg C");
-
-  /* Display the results (acceleration is measured in m/s^2) */
   Serial.print("\t\tAccel X: ");
-  Serial.print(accel.acceleration.x);
-  Serial.print(" \tY: ");
-  Serial.print(accel.acceleration.y);
-  Serial.print(" \tZ: ");
-  Serial.print(accel.acceleration.z);
+  Serial.print(accel->acceleration.x);
+  Serial.print("  \tY: ");
+  Serial.print(accel->acceleration.y);
+  Serial.print("  \tZ: ");
+  Serial.print(accel->acceleration.z);
   Serial.println(" m/s^2 ");
 
-  Serial.print("\t\tMag X: ");
-  Serial.print(mag.magnetic.x);
-  Serial.print(" \tY: ");
-  Serial.print(mag.magnetic.y);
-  Serial.print(" \tZ: ");
-  Serial.print(mag.magnetic.z);
+  Serial.print("\t\tGyros X: ");
+  Serial.print(gyro->gyro.x);
+  Serial.print("  \tY: ");
+  Serial.print(gyro->gyro.y);
+  Serial.print("  \tZ: ");
+  Serial.print(gyro->gyro.z);
+  Serial.println(" radians/s ");
+
+
+  Serial.print("\t\tMagne X: ");
+  Serial.print(mag->magnetic.x);
+  Serial.print("  \tY: ");
+  Serial.print(mag->magnetic.y);
+  Serial.print("  \tZ: ");
+  Serial.print(mag->magnetic.z);
   Serial.println(" uT");
 
-  /* Display the results (acceleration is measured in m/s^2) */
-  Serial.print("\t\tGyro X: ");
-  Serial.print(gyro.gyro.x);
-  Serial.print(" \tY: ");
-  Serial.print(gyro.gyro.y);
-  Serial.print(" \tZ: ");
-  Serial.print(gyro.gyro.z);
-  Serial.println(" radians/s ");
+
+  Serial.print("\t\tTemp: ");
+  Serial.print(temp->temperature);
+  Serial.print(" *C");
+  Serial.print("\tPress: ");
+  Serial.print(press->pressure / 100.0F);
+  Serial.print(" hPa");
+  Serial.print("\tAlt: ");
+  Serial.print(alt->altitude);
+  Serial.println(" m");
+
   Serial.println();
 }
 
@@ -174,12 +177,11 @@ void setup(void) {
 
   initialize_wifi();
 
-  // Try to initialize I2C!
   // On Qt Py ESP32-S3, STEMMA QT = SDA1=41, SCL1=40
   // Ref: https://learn.adafruit.com/adafruit-qt-py-esp32-s3
   Wire1.begin(41, 40);
-  initialize_icm20948();
   initialize_bmp388();
+  initialize_icm20948();
 
   Serial.println("");
   delay(100); // blocking
@@ -187,19 +189,16 @@ void setup(void) {
 
 // use millis() so that loop itself becomes non-blocking
 unsigned long previousMillis = 0; 
-const long interval = 1000; 
+const long interval = 500; 
 void loop() {
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
 
-    bmp.performReading();
-    print_bmp388_readings();
-
-    sensors_event_t accel, gyro, mag, temp;
-    icm.getEvent(&accel, &gyro, &temp, &mag);
-    print_icm_readings(accel, gyro, temp, mag);
-
-    Serial.println("");
+    sensors_event_t accel, gyro, mag, temp, press, alt, temp2;
+    bmp.getEvent(&temp, &press, &alt); // temperature, pressure, altitude
+    icm.getEvent(&accel, &gyro, &temp2, &mag); // accel, gyro, mag, temp2
+    print(&accel, &gyro, &mag, &temp, &press, &alt);
+    
   }
 }

@@ -50,6 +50,7 @@
 
 /** Sensor types */
 typedef enum {
+  SENSOR_TYPE_UNIFIED = (0), /**< mixed type */
   SENSOR_TYPE_ACCELEROMETER = (1), /**< Gravity + linear acceleration */
   SENSOR_TYPE_MAGNETIC_FIELD = (2),
   SENSOR_TYPE_ORIENTATION = (3),
@@ -58,8 +59,7 @@ typedef enum {
   SENSOR_TYPE_PRESSURE = (6),
   SENSOR_TYPE_PROXIMITY = (8),
   SENSOR_TYPE_GRAVITY = (9),
-  SENSOR_TYPE_LINEAR_ACCELERATION =
-      (10), /**< Acceleration not including gravity */
+  SENSOR_TYPE_LINEAR_ACCELERATION = (10), /**< Acceleration not including gravity */
   SENSOR_TYPE_ROTATION_VECTOR = (11),
   SENSOR_TYPE_RELATIVE_HUMIDITY = (12),
   SENSOR_TYPE_AMBIENT_TEMPERATURE = (13),

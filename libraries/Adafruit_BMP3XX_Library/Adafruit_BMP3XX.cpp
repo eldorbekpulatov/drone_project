@@ -57,7 +57,7 @@ static int8_t cal_crc(uint8_t seed, uint8_t data);
 /**************************************************************************/
 Adafruit_BMP3XX::Adafruit_BMP3XX(void) {
   _meas_end = 0;
-  _filterEnabled = _tempOSEnabled = _presOSEnabled = false;
+  _filterEnabled = _tempOSEnabled = _presOSEnabled = _ODREnabled = false;
 }
 
 /**************************************************************************/
@@ -250,9 +250,8 @@ bool Adafruit_BMP3XX::_init(void) {
     @return Temperature in degrees Centigrade
 */
 /**************************************************************************/
-float Adafruit_BMP3XX::readTemperature(void) {
-  performReading();
-  return temperature;
+float Adafruit_BMP3XX::getTemperature(void) {
+  return _temperature;
 }
 
 /**************************************************************************/
@@ -269,9 +268,43 @@ uint8_t Adafruit_BMP3XX::chipID(void) { return the_sensor.chip_id; }
     @return Barometic pressure in Pascals
 */
 /**************************************************************************/
-float Adafruit_BMP3XX::readPressure(void) {
+float Adafruit_BMP3XX::getPressure(void) {
+  return _pressure;
+}
+
+void Adafruit_BMP3XX::getEvent(sensors_event_t *temp, sensors_event_t *pressure, sensors_event_t *altitude) {
+  uint32_t t = millis();
   performReading();
-  return pressure;
+  fillAltitudeEvent(altitude, t);
+  fillPressureEvent(pressure, t);
+  fillTemperatureEvent(temp, t);
+}
+
+void Adafruit_BMP3XX::fillPressureEvent(sensors_event_t *event, uint32_t timestamp) {
+  memset(event, 0, sizeof(sensors_event_t));
+  event->version = 1;
+  event->sensor_id = chipID();
+  event->type = SENSOR_TYPE_PRESSURE;
+  event->timestamp = timestamp;
+  event->pressure = getPressure();
+}
+
+void Adafruit_BMP3XX::fillTemperatureEvent(sensors_event_t *event, uint32_t timestamp) {
+  memset(event, 0, sizeof(sensors_event_t));
+  event->version = 1;
+  event->sensor_id = chipID();
+  event->type = SENSOR_TYPE_AMBIENT_TEMPERATURE;
+  event->timestamp = timestamp;
+  event->temperature = getTemperature();
+} 
+
+void Adafruit_BMP3XX::fillAltitudeEvent(sensors_event_t *event, uint32_t timestamp) {
+  memset(event, 0, sizeof(sensors_event_t));
+  event->version = 1;
+  event->sensor_id = chipID();
+  event->type = SENSOR_TYPE_ALTITUDE;
+  event->timestamp = timestamp;
+  event->altitude = getAltitude();
 }
 
 /**************************************************************************/
@@ -285,7 +318,7 @@ float Adafruit_BMP3XX::readPressure(void) {
     @return Altitude in meters
 */
 /**************************************************************************/
-float Adafruit_BMP3XX::readAltitude(float seaLevel) {
+float Adafruit_BMP3XX::getAltitude(float seaLevel) {
   // Equation taken from BMP180 datasheet (page 16):
   //  http://www.adafruit.com/datasheets/BST-BMP180-DS000-09.pdf
 
@@ -293,40 +326,33 @@ float Adafruit_BMP3XX::readAltitude(float seaLevel) {
   // at high altitude. See this thread for more information:
   //  http://forums.adafruit.com/viewtopic.php?f=22&t=58064
 
-  float atmospheric = readPressure() / 100.0F;
+  float atmospheric = getPressure() / 100.0F;
   return 44330.0 * (1.0 - pow(atmospheric / seaLevel, 0.1903));
 }
 
 /**************************************************************************/
 /*!
-    @brief Performs a full reading of all sensors in the BMP3XX.
-
-    Assigns the internal Adafruit_BMP3XX#temperature & Adafruit_BMP3XX#pressure
-   member variables
-
+    @brief  Applies the current settings to the sensor
     @return True on success, False on failure
 */
 /**************************************************************************/
-bool Adafruit_BMP3XX::performReading(void) {
-  g_i2c_dev = i2c_dev;
-  g_spi_dev = spi_dev;
+bool Adafruit_BMP3XX::applySettings(){ 
   int8_t rslt;
   /* Used to select the settings user needs to change */
   uint16_t settings_sel = 0;
-  /* Variable used to select the sensor component */
-  uint8_t sensor_comp = 0;
 
   /* Select the pressure and temperature sensor to be enabled */
   the_sensor.settings.temp_en = BMP3_ENABLE;
   settings_sel |= BMP3_SEL_TEMP_EN;
-  sensor_comp |= BMP3_TEMP;
+
+  the_sensor.settings.press_en = BMP3_ENABLE;
+  settings_sel |= BMP3_SEL_PRESS_EN;
+
+  
   if (_tempOSEnabled) {
     settings_sel |= BMP3_SEL_TEMP_OS;
   }
 
-  the_sensor.settings.press_en = BMP3_ENABLE;
-  settings_sel |= BMP3_SEL_PRESS_EN;
-  sensor_comp |= BMP3_PRESS;
   if (_presOSEnabled) {
     settings_sel |= BMP3_SEL_PRESS_OS;
   }
@@ -352,13 +378,49 @@ bool Adafruit_BMP3XX::performReading(void) {
     return false;
 
   /* Set the power mode */
-  the_sensor.settings.op_mode = BMP3_MODE_FORCED;
 #ifdef BMP3XX_DEBUG
   Serial.println(F("Setting power mode"));
 #endif
   rslt = bmp3_set_op_mode(&the_sensor);
   if (rslt != BMP3_OK)
     return false;
+}
+
+/**************************************************************************/
+/*!
+    @brief  Setter for power mode
+    @param  mode Power mode to set. Can be BMP3_MODE_SLEEP, BMP3_MODE_FORCED, or BMP3_MODE_NORMAL
+    @return True on success, False on failure
+*/
+/**************************************************************************/
+bool Adafruit_BMP3XX::setPowerMode(uint8_t mode) {
+  if (mode > BMP3_MODE_NORMAL)
+    return false;
+
+  the_sensor.settings.op_mode = mode;
+  return true;
+}
+
+/**************************************************************************/
+/*!
+    @brief Performs a full reading of all sensors in the BMP3XX.
+
+    Assigns the internal Adafruit_BMP3XX#temperature & Adafruit_BMP3XX#pressure
+   member variables
+
+    @return True on success, False on failure
+*/
+/**************************************************************************/
+bool Adafruit_BMP3XX::performReading(void) {
+  g_i2c_dev = i2c_dev;
+  g_spi_dev = spi_dev;
+  
+  int8_t rslt;
+  
+  /* Variable used to select the sensor component */
+  uint8_t sensor_comp = 0;
+  sensor_comp |= BMP3_TEMP;
+  sensor_comp |= BMP3_PRESS;
 
   /* Variable used to store the compensated data */
   struct bmp3_data data;
@@ -382,8 +444,8 @@ bool Adafruit_BMP3XX::performReading(void) {
     */
 
   /* Save the temperature and pressure data */
-  temperature = data.temperature;
-  pressure = data.pressure;
+  _temperature = data.temperature;
+  _pressure = data.pressure;
 
   return true;
 }
