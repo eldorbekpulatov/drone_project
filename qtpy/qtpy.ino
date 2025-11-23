@@ -107,52 +107,39 @@ void initialize_icm20948(){
 
 void print(sensors_event_t *accel, sensors_event_t *gyro, sensors_event_t *mag, 
   sensors_event_t *temp, sensors_event_t *press, sensors_event_t *alt){
-  // Serial.print("\t\tTime: ");
-  // Serial.print(event->timestamp);
-  // Serial.print(" ms");
-  // Serial.print("\tType:");
-  // Serial.print(event->type);
-  // Serial.print("\tVersion:");
-  // Serial.print(event->version);
-  // Serial.print("\tSens ID:");
-  // Serial.print(event->sensor_id);
-  // Serial.println();
+  char buf[128];
 
-  Serial.print("\t\tAccel X: ");
-  Serial.print(accel->acceleration.x);
-  Serial.print("  \tY: ");
-  Serial.print(accel->acceleration.y);
-  Serial.print("  \tZ: ");
-  Serial.print(accel->acceleration.z);
-  Serial.println(" m/s^2 ");
+  // Accel
+  snprintf(buf, sizeof(buf),
+          "\t\tAccel X: %7.2f  \tY: %7.2f  \tZ: %7.2f m/s^2",
+          accel->acceleration.x,
+          accel->acceleration.y,
+          accel->acceleration.z);
+  Serial.println(buf);
 
-  Serial.print("\t\tGyros X: ");
-  Serial.print(gyro->gyro.x);
-  Serial.print("  \tY: ");
-  Serial.print(gyro->gyro.y);
-  Serial.print("  \tZ: ");
-  Serial.print(gyro->gyro.z);
-  Serial.println(" radians/s ");
+  // Gyros
+  snprintf(buf, sizeof(buf),
+          "\t\tGyros X: %7.2f  \tY: %7.2f  \tZ: %7.2f radians/s",
+          gyro->gyro.x,
+          gyro->gyro.y,
+          gyro->gyro.z);
+  Serial.println(buf);
 
+  // Magne
+  snprintf(buf, sizeof(buf),
+          "\t\tMagne X: %7.2f  \tY: %7.2f  \tZ: %7.2f uT",
+          mag->magnetic.x,
+          mag->magnetic.y,
+          mag->magnetic.z);
+  Serial.println(buf);
 
-  Serial.print("\t\tMagne X: ");
-  Serial.print(mag->magnetic.x);
-  Serial.print("  \tY: ");
-  Serial.print(mag->magnetic.y);
-  Serial.print("  \tZ: ");
-  Serial.print(mag->magnetic.z);
-  Serial.println(" uT");
-
-
-  Serial.print("\t\tTemp: ");
-  Serial.print(temp->temperature);
-  Serial.print(" *C");
-  Serial.print("\tPress: ");
-  Serial.print(press->pressure / 100.0F);
-  Serial.print(" hPa");
-  Serial.print("\tAlt: ");
-  Serial.print(alt->altitude);
-  Serial.println(" m");
+  // Temp / Press / Alt
+  snprintf(buf, sizeof(buf),
+          "\t\tTemp: %6.2f *C\tPress: %6.2f hPa\tAlt: %8.2f m",
+          temp->temperature,
+          press->pressure / 100.0F,
+          alt->altitude);
+  Serial.println(buf);
 
   Serial.println();
 }
