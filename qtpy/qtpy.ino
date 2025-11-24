@@ -146,14 +146,14 @@ void print(sensors_event_t *accel, sensors_event_t *gyro, sensors_event_t *mag,
 
 
 // volatile int counter = 0;
-// IRAM_ATTR void inc_counter() {
-//     counter += 1;
-// }
+// IRAM_ATTR void inc_counter() { counter += 1; }
 // attachInterrupt(digitalPinToInterrupt(16), inc_counter, CHANGE); // FG
 
+// static assignment of pins to 0/1
 // pinMode(16, OUTPUT); // DIR    
 // digitalWrite(6, HIGH); 
 
+// analog write can output PWM signal
 // pinMode(0, OUTPUT); // PWM
 // analogWrite(0, 127); 
 
@@ -174,18 +174,21 @@ void setup(void) {
   delay(100); // blocking
 }
 
-// use millis() so that loop itself becomes non-blocking
-unsigned long previousMillis = 0; 
-const long interval = 500; 
-void loop() {
-  unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= interval) {
-    previousMillis = currentMillis;
+// // Non-blocking loop using millis() for timing
+// unsigned long previousMillis = 0; 
+// const long interval = 500;
+// void loop() {
+//   unsigned long currentMillis = millis();
+//   if (currentMillis - previousMillis >= interval) {
+//     previousMillis = currentMillis;
+//     // ... do something every 500ms
+//   }
+// }
 
-    sensors_event_t accel, gyro, mag, temp, press, alt, temp2;
-    bmp.getEvent(&temp, &press, &alt); // temperature, pressure, altitude
-    icm.getEvent(&accel, &gyro, &temp2, &mag); // accel, gyro, mag, temp2
-    print(&accel, &gyro, &mag, &temp, &press, &alt);
-    
-  }
+void loop() {
+  sensors_event_t accel, gyro, mag, temp, press, alt, temp2;
+  bmp.getEvent(&temp, &press, &alt); // temperature, pressure, altitude
+  icm.getEvent(&accel, &gyro, &temp2, &mag); // accel, gyro, mag, temp2
+  print(&accel, &gyro, &mag, &temp, &press, &alt);
+  delay(500); // blocking
 }

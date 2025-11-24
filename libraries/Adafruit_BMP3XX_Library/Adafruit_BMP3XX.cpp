@@ -56,7 +56,6 @@ static int8_t cal_crc(uint8_t seed, uint8_t data);
 */
 /**************************************************************************/
 Adafruit_BMP3XX::Adafruit_BMP3XX(void) {
-  _meas_end = 0;
   _filterEnabled = _tempOSEnabled = _presOSEnabled = _ODREnabled = false;
 }
 
@@ -246,16 +245,6 @@ bool Adafruit_BMP3XX::_init(void) {
 
 /**************************************************************************/
 /*!
-    @brief Performs a reading and returns the ambient temperature.
-    @return Temperature in degrees Centigrade
-*/
-/**************************************************************************/
-float Adafruit_BMP3XX::getTemperature(void) {
-  return _temperature;
-}
-
-/**************************************************************************/
-/*!
     @brief Reads the chip identifier
     @return BMP3_CHIP_ID or BMP390_CHIP_ID
 */
@@ -270,6 +259,16 @@ uint8_t Adafruit_BMP3XX::chipID(void) { return the_sensor.chip_id; }
 /**************************************************************************/
 float Adafruit_BMP3XX::getPressure(void) {
   return _pressure;
+}
+
+/**************************************************************************/
+/*!
+    @brief Performs a reading and returns the ambient temperature.
+    @return Temperature in degrees Centigrade
+*/
+/**************************************************************************/
+float Adafruit_BMP3XX::getTemperature(void) {
+  return _temperature;
 }
 
 void Adafruit_BMP3XX::getEvent(sensors_event_t *temp, sensors_event_t *pressure, sensors_event_t *altitude) {
@@ -338,7 +337,6 @@ float Adafruit_BMP3XX::getAltitude(float seaLevel) {
 /**************************************************************************/
 bool Adafruit_BMP3XX::applySettings(){ 
   int8_t rslt;
-  /* Used to select the settings user needs to change */
   uint16_t settings_sel = 0;
 
   /* Select the pressure and temperature sensor to be enabled */
@@ -349,21 +347,10 @@ bool Adafruit_BMP3XX::applySettings(){
   settings_sel |= BMP3_SEL_PRESS_EN;
 
   
-  if (_tempOSEnabled) {
-    settings_sel |= BMP3_SEL_TEMP_OS;
-  }
-
-  if (_presOSEnabled) {
-    settings_sel |= BMP3_SEL_PRESS_OS;
-  }
-
-  if (_filterEnabled) {
-    settings_sel |= BMP3_SEL_IIR_FILTER;
-  }
-
-  if (_ODREnabled) {
-    settings_sel |= BMP3_SEL_ODR;
-  }
+  if (_tempOSEnabled) settings_sel |= BMP3_SEL_TEMP_OS;
+  if (_presOSEnabled) settings_sel |= BMP3_SEL_PRESS_OS;
+  if (_filterEnabled) settings_sel |= BMP3_SEL_IIR_FILTER;
+  if (_ODREnabled) settings_sel |= BMP3_SEL_ODR;
 
   // set interrupt to data ready
   // settings_sel |= BMP3_DRDY_EN_SEL | BMP3_LEVEL_SEL | BMP3_LATCH_SEL;
@@ -373,17 +360,15 @@ bool Adafruit_BMP3XX::applySettings(){
   Serial.println("Setting sensor settings");
 #endif
   rslt = bmp3_set_sensor_settings(settings_sel, &the_sensor);
-
-  if (rslt != BMP3_OK)
-    return false;
+  if (rslt != BMP3_OK) return false;
 
   /* Set the power mode */
 #ifdef BMP3XX_DEBUG
   Serial.println(F("Setting power mode"));
 #endif
   rslt = bmp3_set_op_mode(&the_sensor);
-  if (rslt != BMP3_OK)
-    return false;
+  if (rslt != BMP3_OK) return false;
+  return true;
 }
 
 /**************************************************************************/
@@ -394,9 +379,7 @@ bool Adafruit_BMP3XX::applySettings(){
 */
 /**************************************************************************/
 bool Adafruit_BMP3XX::setPowerMode(uint8_t mode) {
-  if (mode > BMP3_MODE_NORMAL)
-    return false;
-
+  if (mode > BMP3_MODE_NORMAL) return false;
   the_sensor.settings.op_mode = mode;
   return true;
 }
@@ -415,8 +398,6 @@ bool Adafruit_BMP3XX::performReading(void) {
   g_i2c_dev = i2c_dev;
   g_spi_dev = spi_dev;
   
-  int8_t rslt;
-  
   /* Variable used to select the sensor component */
   uint8_t sensor_comp = 0;
   sensor_comp |= BMP3_TEMP;
@@ -430,23 +411,12 @@ bool Adafruit_BMP3XX::performReading(void) {
 #ifdef BMP3XX_DEBUG
   Serial.println(F("Getting sensor data"));
 #endif
-  rslt = bmp3_get_sensor_data(sensor_comp, &data, &the_sensor);
-  if (rslt != BMP3_OK)
-    return false;
-
-  /*
-#ifdef BMP3XX_DEBUG
-  Serial.println(F("Analyzing sensor data"));
-#endif
-  rslt = analyze_sensor_data(&data);
-  if (rslt != BMP3_OK)
-    return false;
-    */
+  int8_t rslt = bmp3_get_sensor_data(sensor_comp, &data, &the_sensor);
+  if (rslt != BMP3_OK) return false;
 
   /* Save the temperature and pressure data */
-  _temperature = data.temperature;
-  _pressure = data.pressure;
-
+  _temperature = (float)data.temperature;
+  _pressure = (float)data.pressure;
   return true;
 }
 

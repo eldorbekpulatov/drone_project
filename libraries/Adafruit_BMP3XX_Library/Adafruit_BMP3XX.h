@@ -51,8 +51,8 @@ public:
                  uint32_t frequency = BMP3XX_DEFAULT_SPIFREQ);
   bool begin_SPI(int8_t cs_pin, int8_t sck_pin, int8_t miso_pin,
                  int8_t mosi_pin, uint32_t frequency = BMP3XX_DEFAULT_SPIFREQ);
+  
   uint8_t chipID(void);
-
   float getTemperature(void);
   float getPressure(void);
   float getAltitude(float seaLevel = SEALEVELPRESSURE_HPA);
@@ -72,25 +72,16 @@ public:
 private:
   Adafruit_I2CDevice *i2c_dev = NULL; ///< Pointer to I2C bus interface
   Adafruit_SPIDevice *spi_dev = NULL; ///< Pointer to SPI bus interface
-
+  
+  struct bmp3_dev the_sensor;
   bool _init(void);  ///< Initialize the sensor
   
+  // assigned after calling performReading() 
+  float _temperature; // (Celsius)
+  float _pressure;    // (Pascals) 
   bool performReading(void);
 
-  /// Temperature (Celsius) assigned after calling performReading()
-  double _temperature;
-  /// Pressure (Pascals) assigned after calling performReading()
-  double _pressure;
-
   bool _filterEnabled, _tempOSEnabled, _presOSEnabled, _ODREnabled;
-  uint8_t _i2caddr;
-  int32_t _sensorID;
-  int8_t _cs;
-  unsigned long _meas_end;
-
-  uint8_t spixfer(uint8_t x);
-
-  struct bmp3_dev the_sensor;
 };
 
 #endif
