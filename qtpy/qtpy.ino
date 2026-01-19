@@ -86,8 +86,6 @@ void initialize_bmp388(){
   bmp.setPressureOversampling(BMP3_OVERSAMPLING_16X);
   bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
   bmp.setOutputDataRate(BMP3_ODR_50_HZ);
-  bmp.setPowerMode(BMP3_MODE_NORMAL);
-  bmp.applySettings();
   Serial.println("Adafruit BMP-388 initialized successfully!");
 }
 
@@ -186,9 +184,11 @@ void setup(void) {
 // }
 
 void loop() {
-  sensors_event_t accel, gyro, mag, temp, press, alt, temp2;
-  bmp.getEvent(&temp, &press, &alt); // temperature, pressure, altitude
-  icm.getEvent(&accel, &gyro, &temp2, &mag); // accel, gyro, mag, temp2
-  print(&accel, &gyro, &mag, &temp, &press, &alt);
+  sensors_event_t press, alt, temp;
+  bmp.getEvent(&temp, &press, &alt);
+  sensors_event_t accel, gyro, mag, temp2;
+  icm.getEvent(&accel, &gyro, &temp2, &mag);
+  
+  print(&accel, &gyro, &mag, &temp2, &press, &alt);
   delay(500); // blocking
 }

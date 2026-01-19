@@ -53,33 +53,34 @@ public:
                  int8_t mosi_pin, uint32_t frequency = BMP3XX_DEFAULT_SPIFREQ);
   
   uint8_t chipID(void);
-  float getTemperature(void);
-  float getPressure(void);
-  float getAltitude(float seaLevel = SEALEVELPRESSURE_HPA);
+  float readTemperature(void);
+  float readPressure(void);
+  float readAltitude(float seaLevel = SEALEVELPRESSURE_HPA);
 
   bool setTemperatureOversampling(uint8_t os);
   bool setPressureOversampling(uint8_t os);
   bool setIIRFilterCoeff(uint8_t fs);
   bool setOutputDataRate(uint8_t odr);
-  bool setPowerMode(uint8_t mode);
-  bool applySettings(void);
 
   void getEvent(sensors_event_t *temp, sensors_event_t *pressure, sensors_event_t *altitude);
   void fillTemperatureEvent(sensors_event_t *event, uint32_t timestamp);
   void fillPressureEvent(sensors_event_t *event, uint32_t timestamp);
   void fillAltitudeEvent(sensors_event_t *event, uint32_t timestamp);
 
+  /// Perform a reading in blocking mode
+  bool performReading(void);
+
+  /// Temperature (Celsius) assigned after calling performReading()
+  double temperature;
+  /// Pressure (Pascals) assigned after calling performReading()
+  double pressure;
+
 private:
   Adafruit_I2CDevice *i2c_dev = NULL; ///< Pointer to I2C bus interface
   Adafruit_SPIDevice *spi_dev = NULL; ///< Pointer to SPI bus interface
-  
+
   struct bmp3_dev the_sensor;
-  bool _init(void);  ///< Initialize the sensor
-  
-  // assigned after calling performReading() 
-  float _temperature; // (Celsius)
-  float _pressure;    // (Pascals) 
-  bool performReading(void);
+  bool _init(void);
 
   bool _filterEnabled, _tempOSEnabled, _presOSEnabled, _ODREnabled;
 };
