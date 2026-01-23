@@ -84,8 +84,8 @@ void initialize_bmp388(){
   // Set up oversampling and filter initialization
   bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_2X);
   bmp.setPressureOversampling(BMP3_OVERSAMPLING_16X);
-  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
-  bmp.setOutputDataRate(BMP3_ODR_50_HZ);
+  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_7);
+  // bmp.setOutputDataRate(BMP3_ODR_100_HZ); // because in FORCED mode
   Serial.println("Adafruit BMP-388 initialized successfully!");
 }
 
@@ -95,11 +95,11 @@ void initialize_icm20948(){
     Serial.println("Failed to find ICM20948 chip");
     while (1) { delay(10); }
   }
-  icm.setAccelRange(ICM20948_ACCEL_RANGE_16_G);
+  icm.setAccelRange(ICM20948_ACCEL_RANGE_2_G);
   icm.setGyroRange(ICM20948_GYRO_RANGE_2000_DPS);
   icm.setAccelRateDivisor(4095);
   icm.setGyroRateDivisor(255);
-  icm.setMagDataRate(AK09916_MAG_DATARATE_10_HZ);
+  icm.setMagDataRate(AK09916_MAG_DATARATE_100_HZ);
   Serial.println("Adafruit ICM-20948 initialized successfully!");
 }
 
@@ -184,11 +184,12 @@ void setup(void) {
 // }
 
 void loop() {
+  // sensor reads take about 8 milis 
   sensors_event_t press, alt, temp;
   bmp.getEvent(&temp, &press, &alt);
   sensors_event_t accel, gyro, mag, temp2;
   icm.getEvent(&accel, &gyro, &temp2, &mag);
-  
+
   print(&accel, &gyro, &mag, &temp2, &press, &alt);
   delay(500); // blocking
 }
