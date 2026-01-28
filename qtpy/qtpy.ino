@@ -202,43 +202,77 @@ void setup(void) {
 
 float prev_roll_rad = 0.0f;
 float prev_pitch_rad = 0.0f;
+float prev_yaw_rad = 0.0f;
 
 /* Returns integrated roll angle in degreed */
-float integrate_roll(sensors_event_t* gyro) {
-  float dt = 0.020f;  // 20 ms
+float integrate_roll(sensors_event_t* gyro, float dt) {
   prev_roll_rad += (gyro->gyro.y) * dt;
   return degrees(prev_roll_rad);
 }
 
 /* Returns integrated pitch angle in degrees */
-float integrate_pitch(sensors_event_t* gyro) {
-  float dt = 0.020f;  // 20 ms
+float integrate_pitch(sensors_event_t* gyro, float dt) {
   prev_pitch_rad += (gyro->gyro.x) * dt;
   return degrees(prev_pitch_rad);
 }
 
 /* Returns trigonometric pitch angle in degrees */
+float integrate_yaw(sensors_event_t* gyro, float dt) {
+  prev_yaw_rad += gyro->gyro.z * dt;
+  return degrees(prev_yaw_rad);
+}
+
+/* Pitch (rotation about Y) */
 float calculate_pitch(sensors_event_t* accel) {
-  float sq = (accel->acceleration.y * accel->acceleration.y) +
-             (accel->acceleration.z * accel->acceleration.z);
-  float body = -accel->acceleration.x / sqrt(sq);
-  return degrees(atan(body));
+  return degrees(atan2(
+      -accel->acceleration.x,
+       sqrt(accel->acceleration.y * accel->acceleration.y +
+            accel->acceleration.z * accel->acceleration.z)
+  ));
 }
 
 /* Returns trigonometric roll angle in degrees */
 float calculate_roll(sensors_event_t* accel) {
-  float sq = (accel->acceleration.x * accel->acceleration.x) +
-             (accel->acceleration.z * accel->acceleration.z);
-  float body = accel->acceleration.y / sqrt(sq);
-  return degrees(atan(body));
+  return degrees(atan2(
+      accel->acceleration.y,
+      accel->acceleration.z
+  ));
+}
+
+
+/* Yaw (rotation about Z) */
+float calculate_yaw(sensors_event_t* mag, float pitch_deg, float roll_deg) {
+  // Convert to radians
+  float pitch = radians(pitch_deg);
+  float roll  = radians(roll_deg);
+
+  float mx = mag->magnetic.x;
+  float my = mag->magnetic.y;
+  float mz = mag->magnetic.z;
+
+  // Tilt compensation
+  float mx2 = mx * cos(pitch) + mz * sin(pitch);
+  float my2 = mx * sin(roll) * sin(pitch)
+            + my * cos(roll)
+            - mz * sin(roll) * cos(pitch);
+
+  // Heading (yaw)
+  float yaw = atan2(-my2, mx2);
+
+  // Convert to degrees [0, 360)
+  float yaw_deg = degrees(yaw);
+  if (yaw_deg < 0) yaw_deg += 360.0f;
+
+  return yaw_deg;
 }
 
 // Non-blocking loop using millis() for timing
 unsigned long previousMillis = 0; 
-const long interval = 20;
+const long interval = 0.020f; // 20 ms
 void loop() {
   unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= interval) {
+  float dt = (currentMillis - previousMillis) * 0.001f;
+  if (dt >= interval) {
     previousMillis = currentMillis;
     
     // sensor reads take about 8 milis 
@@ -251,14 +285,21 @@ void loop() {
     gyro.gyro.y -= gyro_bias_y;
     gyro.gyro.z -= gyro_bias_z;
 
-    Serial.print("Tpitch:");
-    Serial.print(calculate_pitch(&accel));
-    Serial.print(" Troll:");
-    Serial.print(calculate_roll(&accel));
-    Serial.print(" Ipitch:");
-    Serial.print(integrate_pitch(&gyro));
-    Serial.print(" Iroll:");
-    Serial.println(integrate_roll(&gyro));
+    float tpitch = calculate_pitch(&accel);
+    float troll  = calculate_roll(&accel);
+    float tyaw   = calculate_yaw(&mag, tpitch, troll);
+    Serial.print(" Tpitch:"); Serial.print(tpitch);
+    Serial.print(" Troll:");  Serial.print(troll);
+    Serial.print(" Tyaw:");   Serial.print(tyaw);
+
+    float ipitch = integrate_pitch(&gyro, dt/1000.0f);
+    float iroll  = integrate_roll(&gyro, dt/1000.0f);
+    float iyaw   = integrate_yaw(&gyro, dt/1000.0f);
+    Serial.print(" Ipitch:"); Serial.print(ipitch);
+    Serial.print(" Iroll:");  Serial.print(iroll);
+    Serial.print(" Iyaw:");   Serial.print(iyaw);
+
+    Serial.print(" delta:"); Serial.println(dt);
   }
 }
 
