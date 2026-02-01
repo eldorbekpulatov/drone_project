@@ -165,8 +165,14 @@ float gyro_bias_x = 0.0f;
 float gyro_bias_y = 0.0f;
 float gyro_bias_z = 0.0f;
 
-void calibrate_icm() {
-    const int N = 50;
+// these values are done only once by rotating the sensor around in a 
+// perfect angles and empirically/manually copyting the offset values. 
+float accel_bias_x = +0.04f;
+float accel_bias_y = +0.14f;
+float accel_bias_z = -0.21f;
+
+void calibrate_gyro() {
+    const int N = 100;
     sensors_event_t a, g, m, t;
     for (int i = 0; i < N; i++) {
         icm.getEvent(&a, &g, &t, &m);
@@ -194,29 +200,27 @@ void setup(void) {
   initialize_bmp388();
   initialize_icm20948();
 
-  calibrate_icm();
-
-  Serial.println("");
+  calibrate_gyro();
   delay(100); // blocking
 }
 
-float prev_roll_rad = 0.0f;
-float prev_pitch_rad = 0.0f;
-float prev_yaw_rad = 0.0f;
 
 /* Returns integrated roll angle in degreed */
+float prev_roll_rad = 0.0f;
 float integrate_roll(sensors_event_t* gyro, float dt) {
   prev_roll_rad += (gyro->gyro.y) * dt;
   return degrees(prev_roll_rad);
 }
 
 /* Returns integrated pitch angle in degrees */
+float prev_pitch_rad = 0.0f;
 float integrate_pitch(sensors_event_t* gyro, float dt) {
   prev_pitch_rad += (gyro->gyro.x) * dt;
   return degrees(prev_pitch_rad);
 }
 
 /* Returns trigonometric pitch angle in degrees */
+float prev_yaw_rad = 0.0f;
 float integrate_yaw(sensors_event_t* gyro, float dt) {
   prev_yaw_rad += gyro->gyro.z * dt;
   return degrees(prev_yaw_rad);
@@ -234,13 +238,14 @@ float calculate_pitch(sensors_event_t* accel) {
 /* Returns trigonometric roll angle in degrees */
 float calculate_roll(sensors_event_t* accel) {
   return degrees(atan2(
-      accel->acceleration.y,
-      accel->acceleration.z
+    accel->acceleration.y,
+      sqrt(accel->acceleration.x * accel->acceleration.x +
+           accel->acceleration.z * accel->acceleration.z)
   ));
 }
 
 
-/* Yaw (rotation about Z) */
+/* Returns Yaw (rotation about Z) */
 float calculate_yaw(sensors_event_t* mag, float pitch_deg, float roll_deg) {
   // Convert to radians
   float pitch = radians(pitch_deg);
@@ -281,9 +286,14 @@ void loop() {
     sensors_event_t accel, gyro, mag, temp2;
     icm.getEvent(&accel, &gyro, &temp2, &mag);
 
+    // normalize the sensor values
     gyro.gyro.x -= gyro_bias_x;
     gyro.gyro.y -= gyro_bias_y;
     gyro.gyro.z -= gyro_bias_z;
+
+    accel.acceleration.x -= accel_bias_x;
+    accel.acceleration.y -= accel_bias_y;
+    accel.acceleration.z -= accel_bias_z;
 
     float tpitch = calculate_pitch(&accel);
     float troll  = calculate_roll(&accel);
@@ -309,7 +319,7 @@ void loop() {
 //   bmp.getEvent(&temp, &press, &alt);
 //   sensors_event_t accel, gyro, mag, temp2;
 //   icm.getEvent(&accel, &gyro, &temp2, &mag);
-
+    
 //   print(&accel, &gyro, &mag, &temp2, &press, &alt);
-//   delay(500); // blocking
+//   delay(90); // blocking
 // }
