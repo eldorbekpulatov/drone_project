@@ -186,25 +186,6 @@ void calibrate_gyro() {
     gyro_bias_z /= N;
 }
 
-
-void setup(void) {
-  Serial.begin(115200);
-  while (!Serial){ delay(10); }
-  Serial.println("Serial Initialized!"); 
-
-  initialize_wifi();
-
-  // On Qt Py ESP32-S3, STEMMA QT = SDA1=41, SCL1=40
-  // Ref: https://learn.adafruit.com/adafruit-qt-py-esp32-s3
-  Wire1.begin(41, 40);
-  initialize_bmp388();
-  initialize_icm20948();
-
-  calibrate_gyro();
-  delay(100); // blocking
-}
-
-
 /* Returns integrated roll angle in degreed */
 float prev_roll_rad = 0.0f;
 float integrate_roll(sensors_event_t* gyro, float dt) {
@@ -244,7 +225,6 @@ float calculate_roll(sensors_event_t* accel) {
   ));
 }
 
-
 /* Returns Yaw (rotation about Z) */
 float calculate_yaw(sensors_event_t* mag, float pitch_deg, float roll_deg) {
   // Convert to radians
@@ -271,14 +251,49 @@ float calculate_yaw(sensors_event_t* mag, float pitch_deg, float roll_deg) {
   return yaw_deg;
 }
 
-// Non-blocking loop using millis() for timing
-unsigned long previousMillis = 0; 
-const long interval = 0.020f; // 20 ms
+
+// KALMAN FILTER
+float T = 0.016; // 16ms loop time
+float KalmanAngleRoll=0, KalmanUncertaintyAngleRoll=2*2;
+float KalmanAnglePitch=0, KalmanUncertaintyAnglePitch=2*2;
+float Kalman1DOutput[]={0,0};
+void kalman_1d(float KalmanState, float KalmanUncertainty, float KalmanInput, float KalmanMeasurement) {
+  KalmanState=KalmanState+T*KalmanInput;
+  KalmanUncertainty=KalmanUncertainty + T * T * 4 * 4;
+  float KalmanGain=KalmanUncertainty * 1/(1*KalmanUncertainty + 3 * 3);
+  KalmanState=KalmanState+KalmanGain * (KalmanMeasurement-KalmanState);
+  KalmanUncertainty=(1-KalmanGain) * KalmanUncertainty;
+  Kalman1DOutput[0]=KalmanState; 
+  Kalman1DOutput[1]=KalmanUncertainty;
+}
+
+
+void setup(void) {
+  Serial.begin(115200);
+  while (!Serial){ delay(10); }
+  Serial.println("Serial Initialized!"); 
+
+  initialize_wifi();
+
+  // On Qt Py ESP32-S3, STEMMA QT = SDA1=41, SCL1=40
+  // Ref: https://learn.adafruit.com/adafruit-qt-py-esp32-s3
+  Wire1.begin(41, 40);
+  initialize_bmp388();
+  initialize_icm20948();
+
+  calibrate_gyro();
+  delay(100); // blocking
+}
+
+
+// Non-blocking loop using micros() for timing
+unsigned long previousMicros = 0; 
+const long interval = 16000; // 16,000 microS = 16mS
 void loop() {
-  unsigned long currentMillis = millis();
-  float dt = (currentMillis - previousMillis) * 0.001f;
+  unsigned long currentMicros = micros();
+  float dt = (currentMicros - previousMicros);
   if (dt >= interval) {
-    previousMillis = currentMillis;
+    previousMicros = currentMicros;
     
     // sensor reads take about 8 milis 
     sensors_event_t press, alt, temp;
@@ -290,7 +305,6 @@ void loop() {
     gyro.gyro.x -= gyro_bias_x;
     gyro.gyro.y -= gyro_bias_y;
     gyro.gyro.z -= gyro_bias_z;
-
     accel.acceleration.x -= accel_bias_x;
     accel.acceleration.y -= accel_bias_y;
     accel.acceleration.z -= accel_bias_z;
@@ -302,24 +316,65 @@ void loop() {
     Serial.print(" Troll:");  Serial.print(troll);
     Serial.print(" Tyaw:");   Serial.print(tyaw);
 
-    float ipitch = integrate_pitch(&gyro, dt/1000.0f);
-    float iroll  = integrate_roll(&gyro, dt/1000.0f);
-    float iyaw   = integrate_yaw(&gyro, dt/1000.0f);
-    Serial.print(" Ipitch:"); Serial.print(ipitch);
-    Serial.print(" Iroll:");  Serial.print(iroll);
-    Serial.print(" Iyaw:");   Serial.print(iyaw);
+    // float ipitch = integrate_pitch(&gyro, dt*interval);
+    // float iroll  = integrate_roll(&gyro, dt*interval);
+    // float iyaw   = integrate_yaw(&gyro, dt*interval);
+    // Serial.print(" Ipitch:"); Serial.print(ipitch);
+    // Serial.print(" Iroll:");  Serial.print(iroll);
+    // Serial.print(" Iyaw:");   Serial.print(iyaw);
 
-    Serial.print(" delta:"); Serial.println(dt);
+    float RatePitch = gyro.gyro.y;
+    float AnglePitch = calculate_pitch(&accel);
+    kalman_1d(KalmanAnglePitch, KalmanUncertaintyAnglePitch, RatePitch, AnglePitch);
+    KalmanAnglePitch=Kalman1DOutput[0]; 
+    KalmanUncertaintyAnglePitch=Kalman1DOutput[1];
+    Serial.print(" PitchAngle[°]:"); Serial.print(KalmanAnglePitch);
+
+    float RateRoll = gyro.gyro.x;
+    float AngleRoll  = calculate_roll(&accel);
+    kalman_1d(KalmanAngleRoll, KalmanUncertaintyAngleRoll, RateRoll, AngleRoll);
+    KalmanAngleRoll=Kalman1DOutput[0]; 
+    KalmanUncertaintyAngleRoll=Kalman1DOutput[1];
+    Serial.print(" RollAngle[°]:");  Serial.print(KalmanAngleRoll);
+
+    Serial.print(" delta[mS]:"); Serial.println(dt/1E3);
   }
 }
 
+// uint32_t LoopTimer;
 // void loop() {
 //   // sensor reads take about 8 milis 
 //   sensors_event_t press, alt, temp;
 //   bmp.getEvent(&temp, &press, &alt);
 //   sensors_event_t accel, gyro, mag, temp2;
 //   icm.getEvent(&accel, &gyro, &temp2, &mag);
-    
-//   print(&accel, &gyro, &mag, &temp2, &press, &alt);
-//   delay(90); // blocking
+
+//   // normalize the sensor values
+//   gyro.gyro.x -= gyro_bias_x;
+//   gyro.gyro.y -= gyro_bias_y;
+//   gyro.gyro.z -= gyro_bias_z;
+//   accel.acceleration.x -= accel_bias_x;
+//   accel.acceleration.y -= accel_bias_y;
+//   accel.acceleration.z -= accel_bias_z;
+
+//   // print(&accel, &gyro, &mag, &temp2, &press, &alt);
+
+//   float RateRoll = gyro.gyro.x;
+//   float AngleRoll  = calculate_roll(&accel);
+//   float RatePitch = gyro.gyro.y;
+//   float AnglePitch = calculate_pitch(&accel);
+  
+//   kalman_1d(KalmanAngleRoll, KalmanUncertaintyAngleRoll, RateRoll, AngleRoll);
+//   KalmanAngleRoll=Kalman1DOutput[0]; 
+//   KalmanUncertaintyAngleRoll=Kalman1DOutput[1];
+
+//   kalman_1d(KalmanAnglePitch, KalmanUncertaintyAnglePitch, RatePitch, AnglePitch);
+//   KalmanAnglePitch=Kalman1DOutput[0]; 
+//   KalmanUncertaintyAnglePitch=Kalman1DOutput[1];
+
+//   Serial.print(" RollAngle[°]:");  Serial.print(KalmanAngleRoll);
+//   Serial.print(" PitchAngle[°]:"); Serial.println(KalmanAnglePitch);
+
+//   while (micros() - LoopTimer < T*(1E6));
+//   LoopTimer=micros();
 // }
