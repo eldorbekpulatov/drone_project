@@ -31,8 +31,7 @@ void setup(void) {
  *  generate some intersting data!
  */
 void loop() {
-  Serial.println("===================================");
-  delay(2000);
+
   /* first show some 'normal' readings */
   mpu.enableSleep(false);
   mpu.enableCycle(false);
@@ -42,9 +41,6 @@ void loop() {
     delay(10);
   }
 
-  
-  Serial.println("===================================");
-  delay(2000);
   /* Next, turn on cycle mode. Note how this changes how often the
    *  readings are updated.
    *
@@ -63,9 +59,6 @@ void loop() {
     delay(10);
   }
 
-
-  Serial.println("===================================");
-  delay(2000);
   /* Finally enable sleep mode. Note that while we can still fetch
    *  data from the measurement registers, the measurements are not
    *  updated. In sleep mode the accelerometer and gyroscope are
